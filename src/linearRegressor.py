@@ -41,7 +41,7 @@ def populatePublicationDict(path):
 
 def buildInputFeatures():
     global pubs
-    
+    inputFeatuers = []
 
 init()
 populatePublicationDict('/Users/agalya/Documents/sml/project/code/Citation-Network-Impact-Prediction/testData.txt')
