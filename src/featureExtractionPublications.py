@@ -13,14 +13,16 @@ def getLines(path):
             yield line
 
 def initAuthorDict(author):
-    global authorsDict
+    global authorsDict    
     authorsDict[author] = {}
     authorsDict[author]['pubList'] = []
     authorsDict[author]['pubCount'] = 0
     authorsDict[author]['citationCount'] = 0
     authorsDict[author]['pubYears'] = {}
     authorsDict[author]['coAuthors'] = {}
-    authorsDict[author]['coAuthorCounts'] = {}
+    authorsDict[author]['coAuthorCounts'] = {}    
+    authorsDict[author]['selfCitationCount'] = 0
+    authorsDict[author]['coAuthorCitationCount'] = 0 
 
 def initVenueDict(venue):
     global venuesDict
@@ -29,6 +31,7 @@ def initVenueDict(venue):
     venuesDict[venue]['pubCount'] = 0
     venuesDict[venue]['citationCount'] = 0
     venuesDict[venue]['pubYears'] = {}
+
 
 def populateAuthorDict(pubData):
     global authorsDict
@@ -101,6 +104,7 @@ def populateDicts(path):
             populateAuthorDict(pubDict[pubId])
             populateVenueDict(pubDict[pubId])
     getCitations()
+    populateAuthorSecondaryFeatures()
     #print pubDict
 
 
@@ -127,11 +131,28 @@ def getCitations():
         for pubId in pubList:
             venuesDict[venue]['citationCount'] += pubDict[pubId]['citationCount']
 
+
+def populateAuthorSecondaryFeatures():
+    print "getting secondary features for author" 
+    for author, data in authorsDict.iteritems():                       
+        for publication in data['pubList']:            
+            publicationData = pubDict[publication]                
+            selfCitation = [i for i, j in zip(data['pubList'], publicationData['references']) if i == j]
+            data['selfCitationCount'] += len(selfCitation)
+            for coAuthor in data['coAuthors']:
+                coAuthorCitation = [i for i, j in zip(authorsDict[coAuthor]['pubList'], publicationData['references']) if i == j and i not in data['pubList']]                
+                if len(coAuthorCitation) > 0:
+                    print author, coAuthor, coAuthorCitation
+                    data['coAuthorCitationCount'] += len(coAuthorCitation)                           
+
+
 def buildInputFeatures():
     global pubDict
     inputFeatuers = []
 
 init()
+
 populateDicts('./testData.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 # populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+#populateDicts('DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
