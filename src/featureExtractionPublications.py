@@ -1,4 +1,14 @@
 import re
+import numpy
+import pandas
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.wrappers.scikit_learn import KerasRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
 
 def init():
     global pubDict, mappings, authorsDict, venuesDict, featureVector
@@ -232,8 +242,30 @@ def populateAuthorSecondaryFeatures():
             i += 1
         data['hIndex'] = hIndex
 
+def buildLR(features):
+    featuresLength = len(features[0])
+    model = Sequential()
+    model.add(Dense(featuresLength, input_dim=featuresLength, kernel_initializer='normal', activation='relu'))
+    model.add(Dense(featuresLength/2, kernel_initializer='normal', activation='relu'))
+    model.add(Dense(1, kernel_initializer='normal'))
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    return model
+
+def runLR(features, predictions):
+    xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
+    #print 'xtr', xTrain, 'xte', xTest, 'ytr', yTrain, 'yte', yTest
+    model = buildLR(features)
+    #estimator = KerasRegressor(build_fn=baseline_model, nb_epoch=100, batch_size=5, verbose=0)
+    model.fit(xTrain, yTrain, epochs=5, batch_size=32)
+    predictedY = model.predict(xTest, batch_size=128)
+    correct = sum([1 for i in xrange(len(xTest)) if yTest[i] == predictedY[i]])
+    #print 'ytest', yTest, 'xtest', xTest, 'predictedY', predictedY
+
 init()
 populateDicts('./testData.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 # populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 buildFeatureVector()
+#features = [[1,2,3,4],[12,3,18,10],[3,2,1,5],[24,21,16,43],[1,1,1,1],[3,4,10,4]]
+#predictions = [0,1,0,1,0,1]
+#runLR(features, predictions)
