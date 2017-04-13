@@ -133,17 +133,26 @@ def getCitations():
 
 
 def populateAuthorSecondaryFeatures():
-    print "getting secondary features for author" 
-    for author, data in authorsDict.iteritems():                       
-        for publication in data['pubList']:            
+    print "Getting secondary features for author" 
+    for author, data in authorsDict.iteritems():  
+        citationCountForPublication = []                     
+        for publication in data['pubList']:                       
             publicationData = pubDict[publication]                
+            citationCountForPublication.append(publicationData['citationCount'])
             selfCitation = [i for i, j in zip(data['pubList'], publicationData['references']) if i == j]
             data['selfCitationCount'] += len(selfCitation)
             for coAuthor in data['coAuthors']:
                 coAuthorCitation = [i for i, j in zip(authorsDict[coAuthor]['pubList'], publicationData['references']) if i == j and i not in data['pubList']]                
                 if len(coAuthorCitation) > 0:
-                    print author, coAuthor, coAuthorCitation
-                    data['coAuthorCitationCount'] += len(coAuthorCitation)                           
+                    data['coAuthorCitationCount'] += len(coAuthorCitation)
+        citationCountForPublication.sort(reverse=True)
+        hIndex = 0
+        i = 1
+        while(i<=len(citationCountForPublication)):
+            if i <= citationCountForPublication[i-1]:
+                hIndex = i
+            i += 1
+        data['hIndex'] = hIndex
 
 
 def buildInputFeatures():
@@ -155,4 +164,4 @@ init()
 populateDicts('./testData.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 # populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
-#populateDicts('DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+# populateDicts('DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
