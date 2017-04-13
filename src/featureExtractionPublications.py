@@ -11,13 +11,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 
 def init():
-    global pubDict, mappings, authorsDict, venuesDict, featureVector
+    global pubDict, mappings, authorsDict, venuesDict, featureVector, citationVector
     mappings = {'#*': 'title', '#c': 'venue', '#!': 'abstract', '#@': 'authors', '#%': 'references', '#index': 'pubId', '#t': 'year'}
     pubDict = {}
     authorsDict = {}
     venuesDict = {}
     featureVector = []
-
+    citationVector = []
 
 def getLines(path):
     with open(path, 'r') as f:
@@ -163,7 +163,7 @@ def getCitations():
 
 
 def buildFeatureVector():
-    global pubDict, authorsDict, venuesDict, featureVector
+    global pubDict, authorsDict, venuesDict, featureVector, citationVector
     for pubId in pubDict:
         pubFeatures = []
         authorFeatures = []
@@ -204,6 +204,7 @@ def buildFeatureVector():
             minGap = min(authorPubYearsDiff) if authorPubYearsDiff else 0
             maxGap = max(authorPubYearsDiff) if authorPubYearsDiff else 0
 
+            authorFeatures.append(authorsDict[author]['hIndex'])
             authorFeatures.append(authorsDict[author]['pubCount'])
             authorFeatures.append(authorsDict[author]['citationCount'])
             authorFeatures.extend(authorPubCounts)
@@ -218,6 +219,8 @@ def buildFeatureVector():
         allFeatures = pubFeatures + authorFeatures + venueFeatures
         featureVector.append(allFeatures)
 
+        # Citation counts (Y value)
+        citationVector.append(pubDict[pubId]['citationCount'])
 
 def populateAuthorSecondaryFeatures():
     global authorsDict, pubDict
@@ -259,13 +262,14 @@ def runLR(features, predictions):
     model.fit(xTrain, yTrain, epochs=5, batch_size=32)
     predictedY = model.predict(xTest, batch_size=128)
     correct = sum([1 for i in xrange(len(xTest)) if yTest[i] == predictedY[i]])
-    #print 'ytest', yTest, 'xtest', xTest, 'predictedY', predictedY
+    #print 'ytest', yTest, 'predictedY', predictedY
+    return [yTest, predictedY, correct]
 
 init()
 populateDicts('./testData.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
-# populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+#populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 buildFeatureVector()
 #features = [[1,2,3,4],[12,3,18,10],[3,2,1,5],[24,21,16,43],[1,1,1,1],[3,4,10,4]]
 #predictions = [0,1,0,1,0,1]
-#runLR(features, predictions)
+results = runLR(featureVector, citationVector)
