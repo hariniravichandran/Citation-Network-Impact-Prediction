@@ -1,11 +1,13 @@
 import re
 
 def init():
-    global pubDict, mappings, authorsDict, venuesDict
+    global pubDict, mappings, authorsDict, venuesDict, featureVector
     mappings = {'#*': 'title', '#c': 'venue', '#!': 'abstract', '#@': 'authors', '#%': 'references', '#index': 'pubId', '#t': 'year'}
     pubDict = {}
     authorsDict = {}
     venuesDict = {}
+    featureVector = []
+
 
 def getLines(path):
     with open(path, 'r') as f:
@@ -18,6 +20,7 @@ def initAuthorDict(author):
     authorsDict[author]['pubList'] = []
     authorsDict[author]['pubCount'] = 0
     authorsDict[author]['citationCount'] = 0
+    authorsDict[author]['citationCountByYear'] = {}
     authorsDict[author]['pubYears'] = {}
     authorsDict[author]['coAuthors'] = {}
     authorsDict[author]['coAuthorCounts'] = {}    
@@ -30,6 +33,7 @@ def initVenueDict(venue):
     venuesDict[venue]['pubList'] = []
     venuesDict[venue]['pubCount'] = 0
     venuesDict[venue]['citationCount'] = 0
+    venuesDict[venue]['citationCountByYear'] = {}
     venuesDict[venue]['pubYears'] = {}
 
 
@@ -100,39 +104,113 @@ def populateDicts(path):
                 pubDict[pubId]['referenceCount'] = len(pubDict[pubId]['references'])
                 pubDict[pubId]['citationCount'] = 0
                 pubDict[pubId]['citedBy'] = []
+                pubDict[pubId]['citationCountByYear'] = {}
             tempDict = {key:None for key in tempDict}
             populateAuthorDict(pubDict[pubId])
             populateVenueDict(pubDict[pubId])
     getCitations()
     populateAuthorSecondaryFeatures()
-    #print pubDict
 
 
 def getCitations():
     global pubDict, authorsDict, venuesDict
     print "getting citations"
+
+    # Citations breakdown by publication (total and yearwise)
     for pubId in pubDict:
         references = pubDict[pubId]['references']
         for reference in references:
             if reference in pubDict:
                 pubDict[reference]['citedBy'].append(pubId)
                 pubDict[reference]['citationCount'] += 1
+                if pubDict[pubId]['year'] not in pubDict[reference]['citationCountByYear']:
+                    pubDict[reference]['citationCountByYear'][pubDict[pubId]['year']] = 0
+                pubDict[reference]['citationCountByYear'][pubDict[pubId]['year']] += 1 
+    
+    # Citations breakdown by author (total and yearwise)
     for author in authorsDict:
         pubList = authorsDict[author]['pubList']
         for pubId in pubList:
             authorsDict[author]['citationCount'] += pubDict[pubId]['citationCount']
+            if pubDict[pubId]['year'] not in authorsDict[author]['citationCountByYear']:
+                authorsDict[author]['citationCountByYear'][pubDict[pubId]['year']] = 0
+            authorsDict[author]['citationCountByYear'][pubDict[pubId]['year']] += 1 
+
         coAuthors = authorsDict[author]['coAuthors']
         for coAuthor in coAuthors:
             pubList = coAuthors[coAuthor]['pubList']
             for pubId in pubList:
                 coAuthors[coAuthor]['citeCount'] += pubDict[pubId]['citationCount']
+    
+    # Citations breakdown by venue (total and yearwise)
     for venue in venuesDict:
         pubList = venuesDict[venue]['pubList']
         for pubId in pubList:
             venuesDict[venue]['citationCount'] += pubDict[pubId]['citationCount']
+            if pubDict[pubId]['year'] not in venuesDict[venue]['citationCountByYear']:
+                venuesDict[venue]['citationCountByYear'][pubDict[pubId]['year']] = 0
+            venuesDict[venue]['citationCountByYear'][pubDict[pubId]['year']] += 1 
+
+
+def buildFeatureVector():
+    global pubDict, authorsDict, venuesDict, featureVector
+    for pubId in pubDict:
+        pubFeatures = []
+        authorFeatures = []
+        venueFeatures = []
+        allFeatures = []
+
+        # Venue Level Features
+        venue = pubDict[pubId]['venue']
+        venuePubCounts = [0 for i in xrange(1968, 2014)]
+        for year in venuesDict[venue]['pubYears']:
+            venuePubCounts[int(year) - 1968] = venuesDict[venue]['pubYears'][year]
+
+        venueFeatures.append(venuesDict[venue]['pubCount'])
+        venueFeatures.extend(venuePubCounts)
+        venueFeatures.append(venuesDict[venue]['citationCount'])
+
+        # Publication Level Features
+        pubCiteCntByYear = [0 for i in xrange(1968, 2014)]
+        for year in pubDict[pubId]['citationCountByYear']:
+            pubCiteCntByYear[int(year) - 1968] = pubDict[pubId]['citationCountByYear'][year]
+
+        pubFeatures.append(len(pubDict[pubId]['authors']))
+        pubFeatures.extend(pubCiteCntByYear)
+
+        # Author Level Features
+        authors = pubDict[pubId]['authors']
+        authorCitationCounts = [[authorsDict[author]['citationCount'], author] for author in authors]
+        authorCitationCounts.sort()
+        for citationCount, author in authorCitationCounts[:2]:
+            authorPubCounts = [0 for i in xrange(1968, 2014)]
+            authorPubYears = []
+            for year in authorsDict[author]['pubYears']:
+                authorPubCounts[int(year) - 1968] = authorsDict[author]['pubYears'][year]
+                authorPubYears.append(int(year))
+
+            authorPubYears.sort()
+            authorPubYearsDiff = [j-i for i, j in zip(authorPubYears[:-1], authorPubYears[1:])]    
+            minGap = min(authorPubYearsDiff) if authorPubYearsDiff else 0
+            maxGap = max(authorPubYearsDiff) if authorPubYearsDiff else 0
+
+            authorFeatures.append(authorsDict[author]['pubCount'])
+            authorFeatures.append(authorsDict[author]['citationCount'])
+            authorFeatures.extend(authorPubCounts)
+
+            authorFeatures.append(minGap)
+            authorFeatures.append(maxGap)
+            authorFeatures.append(min(authorsDict[author]['pubYears'].values()))
+            authorFeatures.append(max(authorsDict[author]['pubYears'].values()))
+        if len(authorCitationCounts) < 2:
+            authorFeatures = authorFeatures + [0] * len(authorFeatures)
+
+        allFeatures = pubFeatures + authorFeatures + venueFeatures
+        featureVector.append(allFeatures)
 
 
 def populateAuthorSecondaryFeatures():
+    global authorsDict, pubDict
     print "Getting secondary features for author" 
     for author, data in authorsDict.iteritems():  
         citationCountForPublication = []                     
@@ -154,14 +232,8 @@ def populateAuthorSecondaryFeatures():
             i += 1
         data['hIndex'] = hIndex
 
-
-def buildInputFeatures():
-    global pubDict
-    inputFeatuers = []
-
 init()
-
 populateDicts('./testData.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 # populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
-# populateDicts('DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+buildFeatureVector()
