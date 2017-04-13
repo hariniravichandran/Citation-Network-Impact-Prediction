@@ -1,10 +1,11 @@
 import re
 
 def init():
-    global pubDict, mappings, authorsDict
+    global pubDict, mappings, authorsDict, venuesDict
     mappings = {'#*': 'title', '#c': 'venue', '#!': 'abstract', '#@': 'authors', '#%': 'references', '#index': 'pubId', '#t': 'year'}
     pubDict = {}
     authorsDict = {}
+    venuesDict = {}
 
 def getLines(path):
     with open(path, 'r') as f:
@@ -21,6 +22,13 @@ def initAuthorDict(author):
     authorsDict[author]['coAuthors'] = {}
     authorsDict[author]['coAuthorCounts'] = {}
 
+def initVenueDict(venue):
+    global venuesDict
+    venuesDict[venue] = {}
+    venuesDict[venue]['pubList'] = []
+    venuesDict[venue]['pubCount'] = 0
+    venuesDict[venue]['citationCount'] = 0
+    venuesDict[venue]['pubYears'] = {}
 
 def populateAuthorDict(pubData):
     global authorsDict
@@ -43,9 +51,21 @@ def populateAuthorDict(pubData):
             authorsDict[author]['coAuthors'][coAuthor]['pubCount'] += 1
         coAuthorCount = len(coAuthors)
         if coAuthorCount not in authorsDict[author]['coAuthorCounts']:
-	    authorsDict[author]['coAuthorCounts'][coAuthorCount] = 0
+            authorsDict[author]['coAuthorCounts'][coAuthorCount] = 0
         authorsDict[author]['coAuthorCounts'][coAuthorCount] += 1
         authorsDict[author]['pubCount'] += 1
+
+def populateVenueDict(pubData):
+    global venuesDict
+    venue = pubData['venue']
+    if venue not in venuesDict:
+        initVenueDict(venue)
+    venuesDict[venue]['pubList'].append(pubData['pubId'])
+    if pubData['year'] not in venuesDict[venue]['pubYears']:
+        venuesDict[venue]['pubYears'][pubData['year']] = 0
+    venuesDict[venue]['pubYears'][pubData['year']] += 1
+    venuesDict[venue]['pubCount'] += 1
+
 
 def populateDicts(path):
     global pubDict, mappings, authorsDict
@@ -72,18 +92,20 @@ def populateDicts(path):
                 pubDict[pubId]['authors'] = [author.strip() for author in pubDict[pubId]['authors'].strip().split(',')]
                 authors = pubDict[pubId]['authors']
                 pubDict[pubId]['authorCount'] = len(authors) if authors else 0
+                pubDict[pubId]['venue'] = pubDict[pubId]['venue'].strip()
                 references = pubDict[pubId]['references']
                 pubDict[pubId]['referenceCount'] = len(pubDict[pubId]['references'])
                 pubDict[pubId]['citationCount'] = 0
                 pubDict[pubId]['citedBy'] = []
             tempDict = {key:None for key in tempDict}
             populateAuthorDict(pubDict[pubId])
+            populateVenueDict(pubDict[pubId])
     getCitations()
     #print pubDict
 
 
 def getCitations():
-    global pubDict, authorsDict
+    global pubDict, authorsDict, venuesDict
     print "getting citations"
     for pubId in pubDict:
         references = pubDict[pubId]['references']
@@ -100,11 +122,16 @@ def getCitations():
             pubList = coAuthors[coAuthor]['pubList']
             for pubId in pubList:
                 coAuthors[coAuthor]['citeCount'] += pubDict[pubId]['citationCount']
+    for venue in venuesDict:
+        pubList = venuesDict[venue]['pubList']
+        for pubId in pubList:
+            venuesDict[venue]['citationCount'] += pubDict[pubId]['citationCount']
 
 def buildInputFeatures():
     global pubDict
     inputFeatuers = []
 
 init()
-#populateDicts('./testData.txt')
-populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+populateDicts('./testData.txt')
+# populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+# populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
