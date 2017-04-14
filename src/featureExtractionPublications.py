@@ -10,6 +10,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 
+#knn
+import numpy as np
+from sklearn.metrics import *
+from sklearn.neighbors import *
+
+#svm
+from sklearn import svm
+
 def init():
     global pubDict, mappings, authorsDict, venuesDict, featureVector, citationVector
     mappings = {'#*': 'title', '#c': 'venue', '#!': 'abstract', '#@': 'authors', '#%': 'references', '#index': 'pubId', '#t': 'year'}
@@ -265,11 +273,44 @@ def runLR(features, predictions):
     #print 'ytest', yTest, 'predictedY', predictedY
     return [yTest, predictedY, correct]
 
+def runKNN(features, predictions):
+    accuracies = []
+    xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
+    for n in range(1, 26):
+        print "Training with ", n, " neighbours, accuracy = ",
+        model = KNeighborsClassifier(n_neighbors=n, algorithm='auto')
+        model.fit(np.array(xTrain), np.array(yTrain))
+        predictedY = model.predict(xTest)
+        accuracy = accuracy_score(yTest, predictedY)
+        print accuracy
+        accuracies.append([n, accuracy, yTest, predictedY])
+    return accuracies
+    #return [yTest, predictedY, accuracy]
+
+def runSVM(features, predictions):
+    accuracies = []
+    xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
+    for n in range(1, 2):
+        print "Training SVM"
+        model = svm.SVC(kernel='linear', C = n)
+        model.fit(np.array(xTrain), np.array(yTrain))
+        print "fitted model"
+        predictedY = model.predict(xTest)
+        print "Predictions completed"
+        accuracy = accuracy_score(yTest, predictedY)
+        print "accuracy = ", accuracy
+        accuracies.append([n, accuracy, yTest, predictedY])
+    return accuracies
+    #return [yTest, predictedY, accuracy]
+
+
 init()
-populateDicts('./testData.txt')
-# populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
-#populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+#populateDicts('./testData.txt')
+#populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 buildFeatureVector()
 #features = [[1,2,3,4],[12,3,18,10],[3,2,1,5],[24,21,16,43],[1,1,1,1],[3,4,10,4]]
 #predictions = [0,1,0,1,0,1]
-results = runLR(featureVector, citationVector)
+#LRResults = runLR(featureVector, citationVector)
+#KNNResults = runKNN(featureVector, citationVector)
+#SVMResults = runSVM(featureVector, citationVector)
