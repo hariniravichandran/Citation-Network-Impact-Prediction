@@ -1,8 +1,9 @@
 import re
 import numpy
 import pandas
+
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers.core import Dense
 from keras.wrappers.scikit_learn import KerasRegressor
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import KFold
@@ -92,7 +93,7 @@ def populateVenueDict(pubData):
     venuesDict[venue]['pubCount'] += 1
 
 
-def populateDicts(path):
+def populateDicts(path, trainingYear = 3, predictingYear = 10):
     global pubDict, mappings, authorsDict
     tempDict = {'title':None, 'venue':None, 'abstract':None, 'authors':None, 'references':None, 'pubId':None, 'year':None}
     for line in getLines(path):
@@ -126,7 +127,23 @@ def populateDicts(path):
             tempDict = {key:None for key in tempDict}
             populateAuthorDict(pubDict[pubId])
             populateVenueDict(pubDict[pubId])
+
     getCitations()
+
+    for pubId, pubData in pubDict.items():
+        publishedYear = int(pubData['year'])        
+        pubData['trainYearsCitationCount'] = 0        
+        pubData['testYearsCitationCount'] = 0 
+        pubData['trainYearsPublication'] = []        
+        pubData['testYearsPublication'] = []
+        for citingPaperId in pubData['citedBy']:            
+            if int(pubDict[citingPaperId]['year']) <= (publishedYear + trainingYear):
+                pubData['trainYearsCitationCount'] += 1
+                pubData['trainYearsPublication'].append(citingPaperId)
+            else:
+                pubData['testYearsCitationCount'] += 1
+                pubData['testYearsPublication'].append(citingPaperId)
+
     populateAuthorSecondaryFeatures()
 
 
@@ -169,64 +186,72 @@ def getCitations():
                 venuesDict[venue]['citationCountByYear'][pubDict[pubId]['year']] = 0
             venuesDict[venue]['citationCountByYear'][pubDict[pubId]['year']] += 1 
 
+def getAuthorFeatureCountUntilYear(author, feature, publishedYear):
+    totalCount = 0
+    for year, count in authorsDict[author][feature].items():
+        if int(year) <= publishedYear:
+            totalCount += count
+    return totalCount
 
-def buildFeatureVector():
+def buildFeatureVector(trainingYear = 3, predictingYear = 10):
     global pubDict, authorsDict, venuesDict, featureVector, citationVector
     for pubId in pubDict:
         pubFeatures = []
         authorFeatures = []
         venueFeatures = []
         allFeatures = []
-
+        publishedYear = int(pubDict[pubId]['year'])        
         # Venue Level Features
         venue = pubDict[pubId]['venue']
-        venuePubCounts = [0 for i in xrange(1968, 2014)]
-        for year in venuesDict[venue]['pubYears']:
-            venuePubCounts[int(year) - 1968] = venuesDict[venue]['pubYears'][year]
+        venuePubCounts = [0] * (trainingYear+1)
+        venueCitationCounts = [0] * (trainingYear+1)
+        for iterYear in range(trainingYear + 1):            
+            venuePubCounts[iterYear] = venuesDict[venue]['pubYears'].get(str(publishedYear+iterYear), 0)
+            venueCitationCounts[iterYear] = venuesDict[venue]['citationCountByYear'].get(str(publishedYear+iterYear), 0)            
 
-        venueFeatures.append(venuesDict[venue]['pubCount'])
+        venueFeatures.append(sum(venuePubCounts))
         venueFeatures.extend(venuePubCounts)
-        venueFeatures.append(venuesDict[venue]['citationCount'])
+        venueFeatures.append(sum(venueCitationCounts))
+        venueFeatures.extend(venueCitationCounts)
 
         # Publication Level Features
-        pubCiteCntByYear = [0 for i in xrange(1968, 2014)]
-        for year in pubDict[pubId]['citationCountByYear']:
-            pubCiteCntByYear[int(year) - 1968] = pubDict[pubId]['citationCountByYear'][year]
-
-        pubFeatures.append(len(pubDict[pubId]['authors']))
+        pubCiteCntByYear = [0] * (trainingYear + 1)
+        for iterYear in range(trainingYear+1):
+            pubCiteCntByYear[iterYear] = pubDict[pubId]['citationCountByYear'] .get(str(publishedYear+iterYear), 0)           
+        
         pubFeatures.extend(pubCiteCntByYear)
+        pubFeatures.append(len(pubDict[pubId]['authors']))
 
         # Author Level Features
         authors = pubDict[pubId]['authors']
-        authorCitationCounts = [[authorsDict[author]['citationCount'], author] for author in authors]
+        authorCitationCounts = [[getAuthorFeatureCountUntilYear(author, 'citationCountByYear', publishedYear), author] for author in authors]
         authorCitationCounts.sort()
-        for citationCount, author in authorCitationCounts[:2]:
-            authorPubCounts = [0 for i in xrange(1968, 2014)]
+        for citationCount, author in authorCitationCounts[:2]:            
+            authorPubCount = getAuthorFeatureCountUntilYear(author, 'pubYears', publishedYear)
             authorPubYears = []
-            for year in authorsDict[author]['pubYears']:
-                authorPubCounts[int(year) - 1968] = authorsDict[author]['pubYears'][year]
-                authorPubYears.append(int(year))
+            for year in authorsDict[author]['pubYears']:  
+                if int(year) <= publishedYear:              
+                    authorPubYears.append(int(year))
 
             authorPubYears.sort()
             authorPubYearsDiff = [j-i for i, j in zip(authorPubYears[:-1], authorPubYears[1:])]    
             minGap = min(authorPubYearsDiff) if authorPubYearsDiff else 0
             maxGap = max(authorPubYearsDiff) if authorPubYearsDiff else 0
 
-            authorFeatures.append(authorsDict[author]['hIndex'])
-            authorFeatures.append(authorsDict[author]['pubCount'])
-            authorFeatures.append(authorsDict[author]['citationCount'])
-            authorFeatures.extend(authorPubCounts)
+            # authorFeatures.append(authorsDict[author]['hIndex'])
+            authorFeatures.append(authorPubCount)
+            authorFeatures.append(citationCount)
 
             authorFeatures.append(minGap)
             authorFeatures.append(maxGap)
-            authorFeatures.append(min(authorsDict[author]['pubYears'].values()))
-            authorFeatures.append(max(authorsDict[author]['pubYears'].values()))
+            # authorFeatures.append(min(authorsDict[author]['pubYears'].values()))
+            # authorFeatures.append(max(authorsDict[author]['pubYears'].values()))
         if len(authorCitationCounts) < 2:
             authorFeatures = authorFeatures + [0] * len(authorFeatures)
 
         allFeatures = pubFeatures + authorFeatures + venueFeatures
         featureVector.append(allFeatures)
-
+                
         # Citation counts (Y value)
         citationVector.append(pubDict[pubId]['citationCount'])
 
@@ -305,9 +330,9 @@ def runSVM(features, predictions):
 
 
 init()
-#populateDicts('./testData.txt')
+populateDicts('DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 #populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
-populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+#populateDicts('/Users/agalya/Documents/sml/project/datasets/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 buildFeatureVector()
 #features = [[1,2,3,4],[12,3,18,10],[3,2,1,5],[24,21,16,43],[1,1,1,1],[3,4,10,4]]
 #predictions = [0,1,0,1,0,1]
