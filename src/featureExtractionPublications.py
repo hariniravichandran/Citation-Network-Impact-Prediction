@@ -1,23 +1,23 @@
 import re
-import numpy
-import pandas
+# import numpy
+# import pandas
 
-from keras.models import Sequential
-from keras.layers.core import Dense
-from keras.wrappers.scikit_learn import KerasRegressor
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
+# from keras.models import Sequential
+# from keras.layers.core import Dense
+# from keras.wrappers.scikit_learn import KerasRegressor
+# from sklearn.model_selection import cross_val_score
+# from sklearn.model_selection import KFold
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.pipeline import Pipeline
+# from sklearn.model_selection import train_test_split
 
-#knn
-import numpy as np
-from sklearn.metrics import *
-from sklearn.neighbors import *
+# #knn
+# import numpy as np
+# from sklearn.metrics import *
+# from sklearn.neighbors import *
 
-#svm
-from sklearn import svm
+# #svm
+# from sklearn import svm
 
 def init():
     global pubDict, mappings, authorsDict, venuesDict, featureVector, citationVector
@@ -193,14 +193,16 @@ def getAuthorFeatureCountUntilYear(author, feature, publishedYear):
             totalCount += count
     return totalCount
 
-def buildFeatureVector(trainingYear = 3, predictingYear = 10):
-    global pubDict, authorsDict, venuesDict, featureVector, citationVector
+def buildFeatureVector(trainingYear = 3, predictingYear = 10, timeFrameEnd = 2013):
+    global pubDict, authorsDict, venuesDict, featureVector, citationVector    
     for pubId in pubDict:
         pubFeatures = []
         authorFeatures = []
         venueFeatures = []
         allFeatures = []
         publishedYear = int(pubDict[pubId]['year'])        
+        if publishedYear > timeFrameEnd - predictingYear:               
+            continue
         # Venue Level Features
         venue = pubDict[pubId]['venue']
         venuePubCounts = [0] * (trainingYear+1)
@@ -251,9 +253,13 @@ def buildFeatureVector(trainingYear = 3, predictingYear = 10):
 
         allFeatures = pubFeatures + authorFeatures + venueFeatures
         featureVector.append(allFeatures)
-                
+
         # Citation counts (Y value)
-        citationVector.append(pubDict[pubId]['citationCount'])
+        citationOverTestPeriod = 0
+        for year, count in pubDict[pubId]['citationCountByYear'].items():            
+            if int(year) <= publishedYear + predictingYear :                 
+                citationOverTestPeriod += int(count)
+        citationVector.append(citationOverTestPeriod)
 
 def populateAuthorSecondaryFeatures():
     global authorsDict, pubDict
@@ -278,55 +284,55 @@ def populateAuthorSecondaryFeatures():
             i += 1
         data['hIndex'] = hIndex
 
-def buildLR(features):
-    featuresLength = len(features[0])
-    model = Sequential()
-    model.add(Dense(featuresLength, input_dim=featuresLength, kernel_initializer='normal', activation='relu'))
-    model.add(Dense(featuresLength/2, kernel_initializer='normal', activation='relu'))
-    model.add(Dense(1, kernel_initializer='normal'))
-    model.compile(loss='mean_squared_error', optimizer='adam')
-    return model
+# def buildLR(features):
+#     featuresLength = len(features[0])
+#     model = Sequential()
+#     model.add(Dense(featuresLength, input_dim=featuresLength, kernel_initializer='normal', activation='relu'))
+#     model.add(Dense(featuresLength/2, kernel_initializer='normal', activation='relu'))
+#     model.add(Dense(1, kernel_initializer='normal'))
+#     model.compile(loss='mean_squared_error', optimizer='adam')
+#     return model
 
-def runLR(features, predictions):
-    xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
-    #print 'xtr', xTrain, 'xte', xTest, 'ytr', yTrain, 'yte', yTest
-    model = buildLR(features)
-    #estimator = KerasRegressor(build_fn=baseline_model, nb_epoch=100, batch_size=5, verbose=0)
-    model.fit(xTrain, yTrain, epochs=5, batch_size=32)
-    predictedY = model.predict(xTest, batch_size=128)
-    correct = sum([1 for i in xrange(len(xTest)) if yTest[i] == predictedY[i]])
-    #print 'ytest', yTest, 'predictedY', predictedY
-    return [yTest, predictedY, correct]
+# def runLR(features, predictions):
+#     xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
+#     #print 'xtr', xTrain, 'xte', xTest, 'ytr', yTrain, 'yte', yTest
+#     model = buildLR(features)
+#     #estimator = KerasRegressor(build_fn=baseline_model, nb_epoch=100, batch_size=5, verbose=0)
+#     model.fit(xTrain, yTrain, epochs=5, batch_size=32)
+#     predictedY = model.predict(xTest, batch_size=128)
+#     correct = sum([1 for i in xrange(len(xTest)) if yTest[i] == predictedY[i]])
+#     #print 'ytest', yTest, 'predictedY', predictedY
+#     return [yTest, predictedY, correct]
 
-def runKNN(features, predictions):
-    accuracies = []
-    xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
-    for n in range(1, 26):
-        print "Training with ", n, " neighbours, accuracy = ",
-        model = KNeighborsClassifier(n_neighbors=n, algorithm='auto')
-        model.fit(np.array(xTrain), np.array(yTrain))
-        predictedY = model.predict(xTest)
-        accuracy = accuracy_score(yTest, predictedY)
-        print accuracy
-        accuracies.append([n, accuracy, yTest, predictedY])
-    return accuracies
-    #return [yTest, predictedY, accuracy]
+# def runKNN(features, predictions):
+#     accuracies = []
+#     xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
+#     for n in range(1, 26):
+#         print "Training with ", n, " neighbours, accuracy = ",
+#         model = KNeighborsClassifier(n_neighbors=n, algorithm='auto')
+#         model.fit(np.array(xTrain), np.array(yTrain))
+#         predictedY = model.predict(xTest)
+#         accuracy = accuracy_score(yTest, predictedY)
+#         print accuracy
+#         accuracies.append([n, accuracy, yTest, predictedY])
+#     return accuracies
+#     #return [yTest, predictedY, accuracy]
 
-def runSVM(features, predictions):
-    accuracies = []
-    xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
-    for n in range(1, 2):
-        print "Training SVM"
-        model = svm.SVC(kernel='linear', C = n)
-        model.fit(np.array(xTrain), np.array(yTrain))
-        print "fitted model"
-        predictedY = model.predict(xTest)
-        print "Predictions completed"
-        accuracy = accuracy_score(yTest, predictedY)
-        print "accuracy = ", accuracy
-        accuracies.append([n, accuracy, yTest, predictedY])
-    return accuracies
-    #return [yTest, predictedY, accuracy]
+# def runSVM(features, predictions):
+#     accuracies = []
+#     xTrain, xTest, yTrain, yTest = train_test_split(features, predictions, test_size=0.6)
+#     for n in range(1, 2):
+#         print "Training SVM"
+#         model = svm.SVC(kernel='linear', C = n)
+#         model.fit(np.array(xTrain), np.array(yTrain))
+#         print "fitted model"
+#         predictedY = model.predict(xTest)
+#         print "Predictions completed"
+#         accuracy = accuracy_score(yTest, predictedY)
+#         print "accuracy = ", accuracy
+#         accuracies.append([n, accuracy, yTest, predictedY])
+#     return accuracies
+#     #return [yTest, predictedY, accuracy]
 
 
 init()
