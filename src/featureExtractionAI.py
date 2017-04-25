@@ -3,14 +3,14 @@ import numpy
 import pandas
 import csv
 
-from keras.models import Sequential
-from keras.layers.core import Dense
-from keras.wrappers.scikit_learn import KerasRegressor
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
+# from keras.models import Sequential
+# from keras.layers.core import Dense
+# from keras.wrappers.scikit_learn import KerasRegressor
+# from sklearn.model_selection import cross_val_score
+# from sklearn.model_selection import KFold
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.pipeline import Pipeline
+# from sklearn.model_selection import train_test_split
 
 #knn
 import numpy as np
@@ -465,6 +465,27 @@ def checkCitationDistribution():
             hist[bucket] += 1
     return hist
 
+def getCitationVsPubDistribution():
+    global pubDict
+    hist = {}
+    for pubId in pubDict:
+        if pubDict[pubId]['citationCount'] not in hist:
+            hist[pubDict[pubId]['citationCount']] = 0
+        hist[pubDict[pubId]['citationCount']] += 1
+    return hist
+
+def checkCitationDistributionbyYear():
+    global pubDict
+    hist = {}
+    for pubId in pubDict:
+        pubYears = pubDict[pubId]['citationCountByYear'].keys()
+        for each in pubYears:
+            if each not in hist:
+                hist[each] = pubDict[pubId]['citationCountByYear'][each]
+            else:
+                hist[each] += pubDict[pubId]['citationCountByYear'][each]
+    return hist
+
 def writeFeatureVector():
     global featureVector, citationVector
     with open('./FeatureVectorPublications_ai.csv', "wb") as f:
@@ -487,11 +508,11 @@ def writeFeatureVector():
 init()
 #populateDicts('./testData.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/citation-acm-v8.txt')
-populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
+populateDicts('/home/ashwin/SML/DBLP_citation_2014_May/DBLP_Citation_2014_May/publications.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/publications.txt')
-buildFeatureVector()
-writeFeatureVector()
-xTrain, xTest, yTrain, yTest = train_test_split(featureVector, citationVector, test_size=0.25)
+#buildFeatureVector()
+#writeFeatureVector()
+#xTrain, xTest, yTrain, yTest = train_test_split(featureVector, citationVector, test_size=0.25)
 # NNPrediction = runNN(xTrain, xTest, yTrain, yTest, featureVector, 10)
 # KNNPrediction = runKNN(xTrain, xTest, yTrain, yTest)
 # SVRPrediction = runSVR(xTrain, xTest, yTrain, yTest, 0.5)
@@ -543,4 +564,4 @@ xTrain, xTest, yTrain, yTest = train_test_split(featureVector, citationVector, t
 #     print getR2(yTest, yPred)
 
 
-# res = checkCitationDistribution()
+res = checkCitationDistributionbyYear()
