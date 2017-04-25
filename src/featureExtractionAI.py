@@ -26,6 +26,12 @@ from sklearn.kernel_ridge import KernelRidge
 #LR
 from sklearn import linear_model
 
+#RF
+from sklearn.ensemble import RandomForestRegressor
+
+#GBR
+from sklearn.ensemble import GradientBoostingRegressor
+
 def init():
     global pubDict, mappings, authorsDict, venuesDict, featureVector, citationVector, scaledFeatureVector, years
     mappings = {'#*': 'title', '#c': 'venue', '#!': 'abstract', '#@': 'authors', '#%': 'references', '#index': 'pubId', '#t': 'year'}
@@ -321,7 +327,8 @@ def buildFeatureVector(trainingYear = 3, predictingYear = 10, timeFrameEnd = 201
             # maxGap = max(authorPubYearsDiff) if authorPubYearsDiff else 0
 
             # authorFeatures.append(authorsDict[author]['hIndex'])
-            authorFeatures.append(getHindexForYear(author, publishedYear))
+            # authorFeatures.append(getHindexForYear(author, publishedYear))
+            authorFeatures.append(authorsDict[author]['hIndex'])
             authorFeatures.append(authorPubCount)
             authorFeatures.append(citationCount)
 
@@ -359,11 +366,6 @@ def runNN(xTrain, xTest, yTrain, yTest, features, epochs=5):
     predictedY = model.predict(xTest, batch_size=128)
     predictedY = [round(y) for y in predictedY]
     return predictedY
-    # mse = mean_squared_error(yTest, predictedY)
-    # correct = sum([1 for i in xrange(len(xTest)) if yTest[i] == predictedY[i]])
-    # print "NN accuracy = ", correct/float(len(yTest))
-    # print "NN MSE = ", mse
-    # return [yTest, predictedY, correct, mse]
 
 def runKNN(xTrain, xTest, yTrain, yTest):
     yValues = []
@@ -375,11 +377,6 @@ def runKNN(xTrain, xTest, yTrain, yTest):
         predictedY = model.predict(xTest)
         predictedY = [round(y) for y in predictedY]
         yValues.append(predictedY)
-    #     accuracy = accuracy_score(yTest, predictedY)
-    #     mse = mean_squared_error(yTest, predictedY)
-    #     print accuracy, mse
-    #     accuracies.append([n, accuracy, mse, yTest, predictedY])
-    # return accuracies
     return yValues
 
 def runSVR(xTrain, xTest, yTrain, yTest, c=1, kernel='rbf', test_size=0.25):
@@ -388,14 +385,6 @@ def runSVR(xTrain, xTest, yTrain, yTest, c=1, kernel='rbf', test_size=0.25):
     predictedY = model.predict(xTest)
     predictedY = [round(y) for y in predictedY]
     return predictedY
-    # accuracy = accuracy_score(yTest, predictedY)
-    # mse = mean_squared_error(yTest, predictedY)
-    # manual_mse = np.mean((np.array(predictedY) - np.array(yTest)) ** 2)
-    # # print "accuracy = ", accuracy
-    # print "c = ", c, " | mse = ", mse
-    # # accuracies.append([accuracy, mse, yTest, predictedY])
-    # return [c, mse]
-    #return [yTest, predictedY, accuracy]
 
 def runSVRCV(xTrain, xTest, yTrain, yTest, c=1, kfold=5):
     model = svm.SVR(kernel='rbf', cache_size=500, C = c)
@@ -410,12 +399,6 @@ def runLR(xTrain, xTest, yTrain, yTest):
     predictedY = regr.predict(xTest)
     predictedY = [round(y) for y in predictedY]
     return predictedY
-    # mse = np.mean((np.array(predictedY) - np.array(yTest)) ** 2)
-    # print("Mean squared error: %.2f"% mse)
-    # var = regr.score(xTest, yTest)
-    # print('Variance score: %.2f' % var)
-    # accuracies.append([mse, yTest, predictedY])
-    # return accuracies
 
 def runRidge(xTrain, xTest, yTrain, yTest):
     regr = linear_model.Ridge(alpha=0.1)
@@ -423,25 +406,27 @@ def runRidge(xTrain, xTest, yTrain, yTest):
     predictedY = regr.predict(xTest)
     predictedY = [round(y) for y in predictedY]
     return predictedY
-    # mse = np.mean((np.array(predictedY) - np.array(yTest)) ** 2)
-    # print("Mean squared error: %.2f"% mse)
-    # var = regr.score(xTest, yTest)
-    # print('Variance score: %.2f' % var)
-    # accuracies.append([mse, yTest, predictedY])
-    # return accuracies
 
 def predict0(xTrain, xTest, yTrain, yTest):
     print "Predict 0"
     predictedY = [0] * len(yTest)
     return predictedY
-    # mse = np.mean((np.array(predictedY) - np.array(yTest)) ** 2)
-    # print("Mean squared error: %.2f"% mse)
 
 def predictSumOfThree(xTrain, xTest, yTrain, yTest):
     predictedY = [sum(record[0:4]) for record in xTest]
     return predictedY
-    # mse = np.mean((np.array(predictedY) - np.array(yTest)) ** 2)
-    # print("Mean squared error: %.2f"% mse)
+
+def runRF(xTrain, xTest, yTrain, yTest, max_depth=None):
+    model = RandomForestRegressor(max_depth=max_depth, random_state=2)
+    model.fit(xTrain, yTrain)
+    predictedY = model.predict(xTest)
+    return predictedY
+
+def runGBR(xTrain, xTest, yTrain, yTest, max_depth=None):
+    model = GradientBoostingRegressor(max_depth=max_depth, random_state=2)
+    model.fit(xTrain, yTrain)
+    predictedY = model.predict(xTest)
+    return predictedY
 
 def getMSE(yTrue, yPred):
     mse = np.mean((np.array(yPred) - np.array(yTrue)) ** 2)
@@ -481,19 +466,16 @@ def checkCitationDistribution():
     return hist
 
 def writeFeatureVector():
-    global featureVector, citationVector, scaledFeatureVector
-    with open('./FeatureVectorPublications.csv', "wb") as f:
+    global featureVector, citationVector
+    with open('./FeatureVectorPublications_ai.csv', "wb") as f:
         writer = csv.writer(f, delimiter='\t')
         writer.writerows(featureVector)
 
-    with open('./ScaledFeatureVectorPublications.csv', "wb") as f:
-        writer = csv.writer(f, delimiter='\t')
-        writer.writerows(scaledFeatureVector)
-
-    with open('./CitationVectorPublications.csv', "wb") as f:
+    with open('./CitationVectorPublications_ai.csv', "wb") as f:
         writer = csv.writer(f, delimiter='\t')
         writer.writerow(citationVector)    
 
+# To import features from CSV
 # featureVector1 = pandas.read_csv('./FeatureVectorPublications.csv', sep='\t', header=None)
 # featureVector = featureVector1.values.tolist()
 # featureVector1 = pandas.read_csv('./ScaledFeatureVectorPublications.csv', sep='\t', header=None)
@@ -508,11 +490,9 @@ init()
 populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/domains/Artificial intelligence.txt')
 # populateDicts('/Users/hariniravichandran/Documents/SML/data/DBLP_Citation_2014_May/publications.txt')
 buildFeatureVector()
-scaleFeatures()
 writeFeatureVector()
 xTrain, xTest, yTrain, yTest = train_test_split(featureVector, citationVector, test_size=0.25)
-
-# NNPrediction = runNN(xTrain, xTest, yTrain, yTest, 10)
+# NNPrediction = runNN(xTrain, xTest, yTrain, yTest, featureVector, 10)
 # KNNPrediction = runKNN(xTrain, xTest, yTrain, yTest)
 # SVRPrediction = runSVR(xTrain, xTest, yTrain, yTest, 0.5)
 # LRPrediction = runLR(xTrain, xTest, yTrain, yTest)
@@ -520,37 +500,47 @@ xTrain, xTest, yTrain, yTest = train_test_split(featureVector, citationVector, t
 # ZeroPrediction = predict0(xTrain, xTest, yTrain, yTest)
 # SumOfThree = predictSumOfThree(xTrain, xTest, yTrain, yTest)
 # SVRCVPrediction = runSVRCV(xTrain, xTest, yTrain, yTest, 6.5, 1)
+# RFPrediction = runRF(xTrain, xTest, yTrain, yTest)
+# GBRPrediction = runGBR(xTrain, xTest, yTrain, yTest)
 
 # mse = getMSE(yTest, NNPrediction)
-# mse = getMSE(yTest, KNNPrediction)
 # mse = getMSE(yTest, SVRPrediction)
 # mse = getMSE(yTest, LRPrediction)
 # mse = getMSE(yTest, RidgePrediction)
 # mse = getMSE(yTest, ZeroPrediction)
 # mse = getMSE(yTest, SumOfThree)
 # mse = getMSE(yTest, SVRCVPrediction)
+# mse = getMSE(yTest, RFPrediction)
+# mse = getMSE(yTest, GBRPrediction)
+# for yPred in KNNPrediction:
+#     print getMSE(yTest, yPred)
 
 # R2 = getR2(yTest, NNPrediction)
-# R2 = getR2(yTest, KNNPrediction)
 # R2 = getR2(yTest, SVRPrediction)
 # R2 = getR2(yTest, LRPrediction)
 # R2 = getR2(yTest, RidgePrediction)
 # R2 = getR2(yTest, ZeroPrediction)
 # R2 = getR2(yTest, SumOfThree)
 # R2 = getR2(yTest, SVRCVPrediction)
+# R2 = getR2(yTest, RFPrediction)
+# R2 = getR2(yTest, GBRPrediction)
+# for yPred in KNNPrediction:
+#     print getR2(yTest, yPred)
 
+# SVR For Difference C values
 # c = 0
 # inc = 0.5
 # cMap = []
 # while c < 31:
 #     c += inc
-#     cMap.append(runSVR(featureVector, citationVector, c))
-    
+#     print "c = ", c
+#     cMap.append(runSVR(xTrain, xTest, yTrain, yTest, c))
 
+# for yPred in cMap:
+#     print getMSE(yTest, yPred)
+# print "----"
+# for yPred in cMap:
+#     print getR2(yTest, yPred)
 
-# print "scaled version"
-# NNResultsScaled = runNN(scaledFeatureVector, citationVector, 10)
-# KNNResultsScaled = runKNN(scaledFeatureVector, citationVector)
-# SVRResultsScaled = runSVR(scaledFeatureVector, citationVector)
 
 # res = checkCitationDistribution()
